@@ -1,0 +1,183 @@
+{
+  "type": "record",
+  "name": "User",
+  "fields": [
+    { "name": "Id", "type": "int" },
+    { "name": "Name", "type": "string" },
+    { "name": "Email", "type": "string" }
+  ]
+}
+
+
+Example Kafka Producer Code Using Avro (No Schema Registry):
+
+using Apache.Avro;
+using Apache.Avro.IO;
+using Apache.Avro.Specific;
+using Confluent.Kafka;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Text;
+using System.Threading.Tasks;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        // Define the Kafka producer configuration
+        var config = new ProducerConfig
+        {
+            BootstrapServers = "localhost:9092"  // Kafka broker address
+        };
+
+        // Avro schema as a JSON string
+        string avroSchemaJson = @"
+        {
+            ""type"": ""record"",
+            ""name"": ""User"",
+            ""fields"": [
+                { ""name"": ""Id"", ""type"": ""int"" },
+                { ""name"": ""Name"", ""type"": ""string"" },
+                { ""name"": ""Email"", ""type"": ""string"" }
+            ]
+        }";
+
+        var schema = new Schema.Parser().Parse(avroSchemaJson);
+
+        // Create a Kafka producer
+        using (var producer = new Producer<string, byte[]>(config))
+        {
+            var topic = "my-topic";  // Kafka topic name
+
+            // Create a User object
+            var user = new Dictionary<string, object>
+            {
+                { "Id", 1 },
+                { "Name", "John Doe" },
+                { "Email", "john.doe@example.com" }
+            };
+
+            // Serialize the user object into Avro binary format
+            byte[] avroBytes = SerializeAvro(schema, user);
+
+            try
+            {
+                // Send the Avro data to Kafka
+                var result = await producer.ProduceAsync(topic, new Message<string, byte[]>
+                {
+                    Key = "user-key",  // Optional key
+                    Value = avroBytes   // Avro binary data
+                });
+
+                Console.WriteLine($"Message delivered to {result.TopicPartitionOffset}");
+            }
+            catch (ProduceException<string, byte[]> e)
+            {
+                Console.WriteLine($"Error producing message: {e.Message}");
+            }
+        }
+    }
+
+    // Method to serialize the user object into Avro format (binary)
+    static byte[] SerializeAvro(Schema schema, Dictionary<string, object> data)
+    {
+        var record = new SpecificRecord(schema);
+        foreach (var field in data)
+        {
+            record.Put(field.Key, field.Value);
+        }
+
+        using (var ms = new MemoryStream())
+        {
+            var encoder = new BinaryEncoder(ms);
+            var writer = new SpecificDatumWriter<SpecificRecord>(schema);
+            writer.Write(record, encoder);
+            encoder.Flush();
+            return ms.ToArray();
+        }
+    }
+}
+The Avro schema is defined as a JSON string and parsed using Schema.Parser().Parse() to generate a schema object.
+The SerializeAvro method takes an Avro schema and a Dictionary of field names and values, creating a specific record (an Avro object). The SpecificDatumWriter is used to serialize the object to a binary format using Avro’s BinaryEncoder.
+
+Example Consumer Code for Avro (Without Schema Registry):
+using Apache.Avro;
+using Apache.Avro.IO;
+using Apache.Avro.Specific;
+using Confluent.Kafka;
+using System;
+using System.Collections.Generic;
+using System.IO;
+
+class Program
+{
+    static void Main(string[] args)
+    {
+        // Kafka consumer configuration
+        var config = new ConsumerConfig
+        {
+            BootstrapServers = "localhost:9092",  // Kafka broker address
+            GroupId = "my-group",                 // Consumer group ID
+            AutoOffsetReset = AutoOffsetReset.Earliest  // Start reading from the earliest message
+        };
+
+        // Avro schema as a JSON string
+        string avroSchemaJson = @"
+        {
+            ""type"": ""record"",
+            ""name"": ""User"",
+            ""fields"": [
+                { ""name"": ""Id"", ""type"": ""int"" },
+                { ""name"": ""Name"", ""type"": ""string"" },
+                { ""name"": ""Email"", ""type"": ""string"" }
+            ]
+        }";
+
+        var schema = new Schema.Parser().Parse(avroSchemaJson);
+
+        // Create the consumer
+        using (var consumer = new Consumer<string, byte[]>(config))
+        {
+            var topic = "my-topic";  // Kafka topic name
+            consumer.Subscribe(topic);
+
+            while (true)
+            {
+                try
+                {
+                    // Consume a message from the topic
+                    var consumeResult = consumer.Consume();
+
+                    // Deserialize the Avro message back to an object
+                    var user = DeserializeAvro(schema, consumeResult.Message.Value);
+
+                    Console.WriteLine($"Consumed message: Id={user["Id"]}, Name={user["Name"]}, Email={user["Email"]}");
+                }
+                catch (ConsumeException e)
+                {
+                    Console.WriteLine($"Error occurred: {e.Error.Reason}");
+                }
+            }
+        }
+    }
+
+    // Method to deserialize Avro data
+    static Dictionary<string, object> DeserializeAvro(Schema schema, byte[] avroBytes)
+    {
+        using (var ms = new MemoryStream(avroBytes))
+        {
+            var decoder = new BinaryDecoder(ms);
+            var reader = new SpecificDatumReader<SpecificRecord>(schema);
+            var record = reader.Read(null, decoder);
+
+            // Convert the Avro record into a dictionary
+            var result = new Dictionary<string, object>();
+            foreach (var field in schema.Fields)
+            {
+                result.Add(field.Name, record.Get(field.Name));
+            }
+            return result;
+        }
+    }
+}

@@ -1,0 +1,45 @@
+{
+  "type": "record",
+  "name": "testRecord",
+  "namespace": "com.priya",
+  "doc": "Sample test record",
+  "fields": [
+	{
+		"name": "header",
+		"type":{
+			"type": "record",
+			"name": "headerRecord",
+			"doc": "Metadata fields for the test record",
+			"fields": [
+			{
+				"type": ["null", "int"],
+				"name": "schemaVersionID",
+				"doc": "Schema Version"
+			},
+			{
+				"type": "long",
+				"name": "eventID",
+				"doc": "Unique Event Id of the test"
+			}]
+		}
+	},
+	{
+		"name": "bodyDetails",
+		"type":{
+			"type": "record",
+			"name": "payloadRecord",
+			"doc": "Details of the test record",
+			"fields": [
+			{
+				"type": "int",
+				"name": "id",
+				"doc": "32-bit signed integer"
+			},
+			{
+				"type": "string",
+				"name": "name",
+				"doc": "Name of the test"
+			}]
+		}
+	}]
+}

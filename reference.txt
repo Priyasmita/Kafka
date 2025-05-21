@@ -1,3 +1,4 @@
 https://docs.confluent.io/platform/current/tools/cli-reference.html
 
 https://i-am-jabi.medium.com/fixing-classpath-is-empty-69288c1509a2
+https://github.com/confluentinc/confluent-kafka-dotnet/blob/master/examples/OAuthOIDC/Program.cs

@@ -13,3 +13,63 @@ if ($fromBeginning) {
 
 # Call Kafka consumer CLI
 Start-Process -FilePath $kafkaBin -ArgumentList $args -NoNewWindow -Wait
+
+
+# File: watch-kafka-topic.ps1
+
+# === CONFIGURATION ===
+$kafkaConsumerPath = "C:\kafka\bin\windows\kafka-console-consumer.bat"
+$bootstrapServers = "localhost:9092"
+$topic = "my-topic"
+$groupId = "powershell-group"
+$fromBeginning = $false
+$filterKeyword = "ERROR"  # Leave empty "" to disable filtering
+$logFile = "kafka-messages.log"
+$maxRetries = 5
+$retryDelaySeconds = 5
+
+# === BUILD ARGUMENTS ===
+$args = "--bootstrap-server $bootstrapServers --topic $topic --group $groupId"
+if ($fromBeginning) {
+    $args += " --from-beginning"
+}
+
+# === START CONSUMER LOOP ===
+$retryCount = 0
+
+Write-Host "📡 Listening to Kafka topic '$topic'..."
+Write-Host "🔍 Filtering messages for keyword: '$filterKeyword'"
+Write-Host "💾 Logging output to: $logFile"
+Write-Host "🔁 Press Ctrl+C to stop."
+
+while ($true) {
+    try {
+        # Start the Kafka consumer and capture output
+        & $kafkaConsumerPath $args 2>&1 | ForEach-Object {
+            $line = $_.ToString()
+
+            # Filter if a keyword is set
+            if ($filterKeyword -eq "" -or $line -like "*$filterKeyword*") {
+                $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                $logLine = "[$timestamp] $line"
+                Write-Host $logLine
+                Add-Content -Path $logFile -Value $logLine
+            }
+        }
+
+        # If the Kafka consumer exits (e.g., topic deleted), break or retry
+        Write-Warning "Kafka consumer exited unexpectedly."
+        throw "Consumer stopped"
+    } catch {
+        Write-Warning "❗ Error: $_"
+        $retryCount++
+
+        if ($retryCount -gt $maxRetries) {
+            Write-Error "Max retries reached. Exiting script."
+            break
+        }
+
+        Write-Host "⏳ Retrying in $retryDelaySeconds seconds... ($retryCount/$maxRetries)"
+        Start-Sleep -Seconds $retryDelaySeconds
+    }
+}

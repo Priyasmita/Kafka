@@ -1,0 +1,15 @@
+$kafkaBin = "C:\kafka\bin\windows\kafka-console-consumer.bat"  # Adjust path if needed
+$bootstrapServers = "localhost:9092"
+$topic = "test-topic"
+$groupId = "my-consumer-group"
+$fromBeginning = $true  # Set to $false if you don't want --from-beginning
+
+# Build argument list
+$args = "--bootstrap-server $bootstrapServers --topic $topic --group $groupId"
+
+if ($fromBeginning) {
+    $args += " --from-beginning"
+}
+
+# Call Kafka consumer CLI
+Start-Process -FilePath $kafkaBin -ArgumentList $args -NoNewWindow -Wait

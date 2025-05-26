@@ -1,0 +1,69 @@
+ALTER TABLE Customers ADD unique_id UNIQUEIDENTIFIER DEFAULT NEWID();
+UPDATE Customers SET unique_id = NEWID() WHERE unique_id IS NULL;
+
+{
+  "name": "sqlserver-customers-connector",
+  "config": {
+    "connector.class": "io.debezium.connector.sqlserver.SqlServerConnector",
+    "database.hostname": "your-sqlserver-host",
+    "database.port": "1433",
+    "database.user": "your-db-user",
+    "database.password": "your-db-password",
+    "database.dbname": "your-db-name",
+    
+    "table.include.list": "dbo.Customers",
+    "database.server.name": "sqlserver1",
+    
+    "key.converter": "io.confluent.connect.avro.AvroConverter",
+    "key.converter.schema.registry.url": "https://your-schema-registry",
+    "key.converter.basic.auth.credentials.source": "USER_INFO",
+    "key.converter.basic.auth.user.info": "<user>:<password>",
+
+    "value.converter": "io.confluent.connect.avro.AvroConverter",
+    "value.converter.schema.registry.url": "https://your-schema-registry",
+    "value.converter.basic.auth.credentials.source": "USER_INFO",
+    "value.converter.basic.auth.user.info": "<user>:<password>",
+
+    "transforms": "unwrap,copyIdToKey,extractKey",
+    
+    "transforms.unwrap.type": "io.debezium.transforms.ExtractNewRecordState",
+    "transforms.unwrap.drop.tombstones": "true",
+    "transforms.unwrap.delete.handling.mode": "rewrite",
+
+    "transforms.copyIdToKey.type": "org.apache.kafka.connect.transforms.ValueToKey",
+    "transforms.copyIdToKey.fields": "unique_id",
+
+    "transforms.extractKey.type": "org.apache.kafka.connect.transforms.ExtractField$Key",
+    "transforms.extractKey.field": "unique_id",
+
+    "column.include.list": "dbo.Customers.id,dbo.Customers.external_id,dbo.Customers.name,dbo.Customers.email,dbo.Customers.unique_id",
+
+    "topic.creation.default.replication.factor": 3,
+    "topic.creation.default.partitions": 6,
+    
+    "database.encrypt": "true",
+
+    "snapshot.mode": "initial",
+    "database.ssl.mode": "require",
+    "database.authentication.type": "oauth",
+    "database.oauth.client.id": "your-client-id",
+    "database.oauth.client.secret": "your-client-secret",
+    "database.oauth.token.endpoint.uri": "https://your-oauth-server/token"
+  }
+}
+
+"transforms.unwrap.drop.tombstones": "true",
+"transforms.unwrap.delete.handling.mode": "rewrite"
+=
+Key: {
+  "unique_id": "abc-123"
+}
+Value: {
+  "id": 1,
+  "external_id": "xyz-001",
+  "name": "Alice",
+  "email": "alice@example.com",
+  "__deleted": "true"
+}
+
+"Note __deleted

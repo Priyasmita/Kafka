@@ -1,3 +1,235 @@
 EXECUTE UNIT TESTS IN PYTHON
 -------------------------------------------------------------------------------------------------
 python -m unittest test_customer_service.py
+
+JAVA CONSUMER
+-------------------------------------------------------------------------------------------------
+<dependencies>
+    <dependency>
+        <groupId>org.apache.kafka</groupId>
+        <artifactId>kafka-clients</artifactId>
+        <version>3.6.1</version>
+    </dependency>
+    <dependency>
+        <groupId>io.confluent</groupId>
+        <artifactId>kafka-avro-serializer</artifactId>
+        <version>7.6.0</version>
+    </dependency>
+</dependencies>
+
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.Properties;
+
+import org.apache.avro.generic.GenericRecord;
+
+public class AvroDebeziumConsumer {
+
+    public static void main(String[] args) {
+
+        Properties props = new Properties();
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "your-kafka-broker:9092");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "avro-customer-consumer-group");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        // Schema registry config
+        props.put("key.deserializer", KafkaAvroDeserializer.class.getName());
+        props.put("value.deserializer", KafkaAvroDeserializer.class.getName());
+        props.put("schema.registry.url", "https://your-schema-registry");
+        props.put("basic.auth.credentials.source", "USER_INFO");
+        props.put("basic.auth.user.info", "<user>:<password>");
+
+        // AVRO deserializes to GenericRecord
+        props.put("specific.avro.reader", "false");
+
+        try (KafkaConsumer<Object, Object> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(Collections.singletonList("sqlserver1.dbo.Customers"));
+
+            while (true) {
+                ConsumerRecords<Object, Object> records = consumer.poll(Duration.ofMillis(1000));
+
+                for (ConsumerRecord<Object, Object> record : records) {
+                    Object key = record.key();
+                    Object value = record.value();
+
+                    if (value instanceof GenericRecord) {
+                        GenericRecord customer = (GenericRecord) value;
+
+                        // Skip deleted records
+                        Object deletedFlag = customer.get("__deleted");
+                        if ("true".equals(String.valueOf(deletedFlag))) {
+                            continue; // skip deleted entries
+                        }
+
+                        System.out.println("Key (UUID): " + key);
+                        System.out.println("Customer ID: " + customer.get("id"));
+                        System.out.println("External ID: " + customer.get("external_id"));
+                        System.out.println("Name: " + customer.get("name"));
+                        System.out.println("Email: " + customer.get("email"));
+                        System.out.println("-----");
+                    }
+                }
+            }
+        }
+    }
+}
+
+import org.apache.kafka.clients.consumer.*;
+import io.confluent.kafka.serializers.KafkaAvroDeserializer;
+import org.apache.avro.generic.GenericRecord;
+
+import java.time.Duration;
+import java.util.Collections;
+import java.util.Properties;
+
+public class AvroDebeziumOAuthConsumer {
+    public static void main(String[] args) {
+        Properties props = new Properties();
+
+        // Kafka broker config (SASL/OAUTHBEARER)
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "your-kafka-broker:9093");
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "avro-customer-consumer-group");
+        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_SSL");
+        props.put(SaslConfigs.SASL_MECHANISM, "OAUTHBEARER");
+
+        // JAAS config for OAuth
+        props.put(SaslConfigs.SASL_JAAS_CONFIG,
+                "org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required " +
+                        "oauth.token.endpoint.uri=\"https://your-oauth-server/token\" " +
+                        "oauth.client.id=\"your-client-id\" " +
+                        "oauth.client.secret=\"your-client-secret\";");
+
+        // Enable OAuth login module
+        props.put("sasl.login.callback.handler.class",
+                "org.apache.kafka.common.security.oauthbearer.secured.OAuthBearerLoginCallbackHandler");
+
+        // Schema Registry OAuth
+        props.put("schema.registry.url", "https://your-schema-registry");
+        props.put("basic.auth.credentials.source", "USER_INFO");
+        props.put("basic.auth.user.info", "your-client-id:your-client-secret");
+
+        // Avro deserialization
+        props.put("key.deserializer", KafkaAvroDeserializer.class.getName());
+        props.put("value.deserializer", KafkaAvroDeserializer.class.getName());
+        props.put("specific.avro.reader", "false");
+
+        try (KafkaConsumer<Object, Object> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(Collections.singletonList("sqlserver1.dbo.Customers"));
+
+            while (true) {
+                ConsumerRecords<Object, Object> records = consumer.poll(Duration.ofMillis(1000));
+
+                for (ConsumerRecord<Object, Object> record : records) {
+                    Object key = record.key();
+                    Object value = record.value();
+
+                    if (value instanceof GenericRecord) {
+                        GenericRecord customer = (GenericRecord) value;
+
+                        Object deletedFlag = customer.get("__deleted");
+                        if ("true".equals(String.valueOf(deletedFlag))) {
+                            continue;
+                        }
+
+                        System.out.println("Key (UUID): " + key);
+                        System.out.println("Customer ID: " + customer.get("id"));
+                        System.out.println("External ID: " + customer.get("external_id"));
+                        System.out.println("Name: " + customer.get("name"));
+                        System.out.println("Email: " + customer.get("email"));
+                        System.out.println("-----");
+                    }
+                }
+            }
+        }
+    }
+}
+
+Install-Package Confluent.Kafka -Version 1.9.2
+Install-Package Confluent.SchemaRegistry -Version 1.9.2
+Install-Package Confluent.SchemaRegistry.Serdes.Avro -Version 1.9.2
+
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using Confluent.Kafka;
+using Confluent.SchemaRegistry;
+using Confluent.SchemaRegistry.Serdes;
+using Avro.Generic;
+
+namespace KafkaAvroDebeziumConsumer
+{
+    class Program
+    {
+        static void Main(string[] args)
+        {
+            var kafkaConfig = new ConsumerConfig
+            {
+                BootstrapServers = "your-kafka-broker:9092",
+                GroupId = "debezium-avro-consumer-group",
+                AutoOffsetReset = AutoOffsetReset.Earliest,
+                EnableAutoCommit = true
+            };
+
+            var schemaRegistryConfig = new SchemaRegistryConfig
+            {
+                Url = "https://your-schema-registry",
+                BasicAuthCredentialsSource = AuthCredentialsSource.UserInfo,
+                BasicAuthUserInfo = "<user>:<password>"
+            };
+
+            using var schemaRegistry = new CachedSchemaRegistryClient(schemaRegistryConfig);
+
+            using var consumer = new ConsumerBuilder<GenericRecord, GenericRecord>(kafkaConfig)
+                .SetKeyDeserializer(new AvroDeserializer<GenericRecord>(schemaRegistry).AsSyncOverAsync())
+                .SetValueDeserializer(new AvroDeserializer<GenericRecord>(schemaRegistry).AsSyncOverAsync())
+                .Build();
+
+            consumer.Subscribe("sqlserver1.dbo.Customers");
+
+            Console.WriteLine("Consuming from topic...");
+
+            try
+            {
+                while (true)
+                {
+                    var result = consumer.Consume(CancellationToken.None);
+
+                    var key = result.Message.Key;
+                    var value = result.Message.Value;
+
+                    if (value != null)
+                    {
+                        var deletedField = value.TryGetValue("__deleted", out var deleted) ? deleted?.ToString() : "false";
+
+                        if (deletedField == "true")
+                        {
+                            // Skip deleted entries
+                            continue;
+                        }
+
+                        Console.WriteLine($"Key (UUID): {key}");
+
+                        Console.WriteLine($"ID: {value["id"]}");
+                        Console.WriteLine($"External ID: {value["external_id"]}");
+                        Console.WriteLine($"Name: {value["name"]}");
+                        Console.WriteLine($"Email: {value["email"]}");
+                        Console.WriteLine("-----------------------------");
+                    }
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                consumer.Close();
+            }
+        }
+    }
+}
+

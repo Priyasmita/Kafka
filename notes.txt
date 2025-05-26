@@ -1,0 +1,3 @@
+EXECUTE UNIT TESTS IN PYTHON
+-------------------------------------------------------------------------------------------------
+python -m unittest test_customer_service.py

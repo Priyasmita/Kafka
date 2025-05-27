@@ -1,0 +1,33 @@
+variables:
+  PROJECT_PATH: Built/JMSLib
+
+build_jmslib:
+  extends: .default_build_job
+
+test_jmslib:
+  extends: .default_test_job
+
+
+  .default_build_job:
+  stage: build
+  script:
+    - echo "Building project..."
+    - dotnet build $PROJECT_PATH/*.csproj
+  rules:
+    - if: '$CI_COMMIT_TAG' != ""
+      when: never
+    - changes:
+        - $PROJECT_PATH/**/*
+    - when: never
+
+.default_test_job:
+  stage: test
+  script:
+    - echo "Testing project..."
+    - dotnet test $PROJECT_PATH/*.csproj
+  rules:
+    - if: '$CI_COMMIT_TAG' != ""
+      when: never
+    - changes:
+        - $PROJECT_PATH/**/*
+    - when: never

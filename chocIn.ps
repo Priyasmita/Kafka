@@ -1,0 +1,128 @@
+$ErrorActionPreference = 'Stop'
+
+$packageName = 'sampleservice'
+$installDir = 'C:\Apps\SampleService'
+$configDir = 'C:\Config'
+$serviceName = 'SampleService'
+$backupDir = 'C:\Apps\Backup'
+
+Write-Host "Starting uninstallation of $packageName..."
+
+try {
+    # Check if service exists
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    
+    if ($service) {
+        Write-Host "Found service: $serviceName with status: $($service.Status)"
+        
+        # Stop the service if it's running
+        if ($service.Status -eq 'Running') {
+            Write-Host "Stopping service: $serviceName"
+            Stop-Service -Name $serviceName -Force
+            
+            # Wait for service to stop
+            $timeout = 30
+            $counter = 0
+            while ((Get-Service -Name $serviceName).Status -ne 'Stopped' -and $counter -lt $timeout) {
+                Start-Sleep -Seconds 1
+                $counter++
+            }
+            
+            if ((Get-Service -Name $serviceName).Status -ne 'Stopped') {
+                Write-Warning "Service did not stop within $timeout seconds. Proceeding with removal anyway."
+            } else {
+                Write-Host "Service stopped successfully"
+            }
+        }
+        
+        # Remove the service
+        Write-Host "Removing Windows service: $serviceName"
+        & sc.exe delete $serviceName
+        
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host "Service $serviceName removed successfully" -ForegroundColor Green
+        } else {
+            Write-Warning "Failed to remove service. Exit code: $LASTEXITCODE"
+        }
+        
+        # Wait a moment for service removal to complete
+        Start-Sleep -Seconds 2
+    } else {
+        Write-Host "Service $serviceName not found - skipping service removal"
+    }
+
+    # Function to backup before removal
+    function Backup-BeforeRemoval {
+        param($sourcePath, $itemName)
+        
+        if (Test-Path $sourcePath) {
+            $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+            $backupPath = Join-Path $backupDir "$itemName`_uninstall_$timestamp"
+            
+            Write-Host "Backing up $itemName to $backupPath before removal"
+            Copy-Item -Path $sourcePath -Destination $backupPath -Recurse -Force
+            return $true
+        }
+        return $false
+    }
+
+    # Create backup directory if it doesn't exist
+    if (!(Test-Path $backupDir)) {
+        New-Item -ItemType Directory -Path $backupDir -Force
+        Write-Host "Created backup directory: $backupDir"
+    }
+
+    # Backup and remove installation directory
+    if (Test-Path $installDir) {
+        Backup-BeforeRemoval -sourcePath $installDir -itemName "SampleService_Installation"
+        
+        Write-Host "Removing installation directory: $installDir"
+        Remove-Item -Path $installDir -Recurse -Force
+        Write-Host "Installation directory removed"
+    } else {
+        Write-Host "Installation directory not found: $installDir"
+    }
+
+    # Backup and remove config file
+    $configFile = Join-Path $configDir "mq-config.json"
+    if (Test-Path $configFile) {
+        Backup-BeforeRemoval -sourcePath $configFile -itemName "mq-config"
+        
+        Write-Host "Removing config file: $configFile"
+        Remove-Item -Path $configFile -Force
+        Write-Host "Config file removed"
+    } else {
+        Write-Host "Config file not found: $configFile"
+    }
+
+    # Check if config directory is empty and remove if so
+    if (Test-Path $configDir) {
+        $configDirContents = Get-ChildItem -Path $configDir -ErrorAction SilentlyContinue
+        if ($configDirContents.Count -eq 0) {
+            Write-Host "Config directory is empty, removing: $configDir"
+            Remove-Item -Path $configDir -Force
+        } else {
+            Write-Host "Config directory contains other files, leaving: $configDir"
+        }
+    }
+
+    Write-Host "Uninstallation completed successfully!" -ForegroundColor Green
+    Write-Host "All files have been backed up to: $backupDir"
+
+} catch {
+    Write-Error "Uninstallation failed: $($_.Exception.Message)"
+    
+    # Try to start the service again if it was stopped during uninstall
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($service -and $service.Status -eq 'Stopped') {
+        Write-Host "Attempting to restart service after failed uninstallation..."
+        try {
+            Start-Service -Name $serviceName
+            Write-Host "Service restarted successfully"
+        } catch {
+            Write-Warning "Could not restart service: $($_.Exception.Message)"
+        }
+    }
+    
+    throw
+}

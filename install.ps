@@ -1,0 +1,155 @@
+$ErrorActionPreference = 'Stop'
+
+$packageName = 'sampleservice'
+$toolsDir = "$(Split-Path -parent $MyInvocation.MyCommand.Definition)"
+$installDir = 'C:\Apps\SampleService'
+$configDir = 'C:\Config'
+$backupDir = 'C:\Apps\Backup'
+$serviceName = 'SampleService'
+
+Write-Host "Starting installation of $packageName..."
+
+# Create backup directory if it doesn't exist
+if (!(Test-Path $backupDir)) {
+    New-Item -ItemType Directory -Path $backupDir -Force
+    Write-Host "Created backup directory: $backupDir"
+}
+
+# Function to create timestamped backup and compress to ZIP
+function Backup-ExistingFiles {
+    param($sourcePath, $itemName)
+    
+    if (Test-Path $sourcePath) {
+        $timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+        $tempBackupPath = Join-Path $backupDir "$itemName`_$timestamp"
+        $zipBackupPath = Join-Path $backupDir "$itemName`_$timestamp.zip"
+        
+        Write-Host "Backing up existing $itemName to $tempBackupPath"
+        Copy-Item -Path $sourcePath -Destination $tempBackupPath -Recurse -Force
+        
+        Write-Host "Compressing backup to ZIP: $zipBackupPath"
+        try {
+            # Use PowerShell's Compress-Archive cmdlet
+            Compress-Archive -Path $tempBackupPath -DestinationPath $zipBackupPath -Force
+            
+            # Remove the temporary uncompressed backup
+            Remove-Item -Path $tempBackupPath -Recurse -Force
+            Write-Host "Backup compressed successfully and temporary files cleaned up"
+        }
+        catch {
+            Write-Warning "Failed to compress backup: $($_.Exception.Message). Keeping uncompressed backup at $tempBackupPath"
+        }
+        
+        return $true
+    }
+    return $false
+}
+
+try {
+    # Stop service if it exists
+    $existingService = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    if ($existingService) {
+        Write-Host "Stopping existing service: $serviceName"
+        Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+        
+        # Wait for service to stop
+        $timeout = 30
+        $counter = 0
+        while ((Get-Service -Name $serviceName).Status -ne 'Stopped' -and $counter -lt $timeout) {
+            Start-Sleep -Seconds 1
+            $counter++
+        }
+        
+        if ((Get-Service -Name $serviceName).Status -ne 'Stopped') {
+            Write-Warning "Service did not stop within $timeout seconds. Proceeding anyway."
+        }
+    }
+
+    # Backup existing installation directory
+    Backup-ExistingFiles -sourcePath $installDir -itemName "SampleService_Installation"
+
+    # Backup existing config file
+    $existingConfig = Join-Path $configDir "mq-config.json"
+    Backup-ExistingFiles -sourcePath $existingConfig -itemName "mq-config"
+
+    # Create installation directory
+    if (!(Test-Path $installDir)) {
+        New-Item -ItemType Directory -Path $installDir -Force
+        Write-Host "Created installation directory: $installDir"
+    }
+
+    # Create config directory
+    if (!(Test-Path $configDir)) {
+        New-Item -ItemType Directory -Path $configDir -Force
+        Write-Host "Created config directory: $configDir"
+    }
+
+    # Copy service executable and App.config
+    $serviceExe = Join-Path $toolsDir "SampleService.exe"
+    $appConfig = Join-Path $toolsDir "App.config"
+    $mqConfig = Join-Path $toolsDir "mq-config.json"
+
+    if (Test-Path $serviceExe) {
+        Copy-Item -Path $serviceExe -Destination $installDir -Force
+        Write-Host "Copied SampleService.exe to $installDir"
+    } else {
+        throw "SampleService.exe not found in package tools directory"
+    }
+
+    if (Test-Path $appConfig) {
+        Copy-Item -Path $appConfig -Destination $installDir -Force
+        Write-Host "Copied App.config to $installDir"
+    } else {
+        Write-Warning "App.config not found in package tools directory"
+    }
+
+    # Copy mq-config.json to config directory
+    if (Test-Path $mqConfig) {
+        Copy-Item -Path $mqConfig -Destination $configDir -Force
+        Write-Host "Copied mq-config.json to $configDir"
+    } else {
+        Write-Warning "mq-config.json not found in package tools directory"
+    }
+
+    # Uninstall existing service if it exists
+    if ($existingService) {
+        Write-Host "Removing existing service registration"
+        & sc.exe delete $serviceName
+        Start-Sleep -Seconds 2
+    }
+
+    # Install and configure the Windows service
+    $serviceExePath = Join-Path $installDir "SampleService.exe"
+    
+    # Install the service with auto startup
+    Write-Host "Installing Windows service: $serviceName"
+    & sc.exe create $serviceName binpath= "`"$serviceExePath`" -startup auto" start= auto
+    
+    if ($LASTEXITCODE -ne 0) {
+        throw "Failed to create Windows service. Exit code: $LASTEXITCODE"
+    }
+
+    # Set service description
+    & sc.exe description $serviceName "Sample Windows Service managed by Chocolatey"
+
+    # Start the service
+    Write-Host "Starting service: $serviceName"
+    Start-Service -Name $serviceName
+
+    # Verify service is running
+    $service = Get-Service -Name $serviceName
+    if ($service.Status -eq 'Running') {
+        Write-Host "Service $serviceName is now running successfully" -ForegroundColor Green
+    } else {
+        Write-Warning "Service $serviceName was installed but is not running. Status: $($service.Status)"
+    }
+
+    Write-Host "Installation completed successfully!" -ForegroundColor Green
+    Write-Host "Service executable: $serviceExePath"
+    Write-Host "Configuration file: $existingConfig"
+    Write-Host "Service status: $((Get-Service -Name $serviceName).Status)"
+
+} catch {
+    Write-Error "Installation failed: $($_.Exception.Message)"
+    throw
+}

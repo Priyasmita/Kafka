@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2010/07/nuspec.xsd">
+  <metadata>
+    <id>YourWindowsService</id>
+    <version>1.0.0</version>
+    <title>Your Windows Service</title>
+    <authors>Your Name</authors>
+    <owners>Your Company</owners>
+    <description>Description of your Windows Service</description>
+    <releaseNotes>Initial release</releaseNotes>
+    <copyright>Copyright 2024</copyright>
+    <tags>windows-service dotnet48</tags>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <dependencies>
+      <group targetFramework=".NETFramework4.8">
+        <!-- Add any NuGet package dependencies here -->
+        <!-- Example: <dependency id="Newtonsoft.Json" version="13.0.1" /> -->
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <!-- Include the main executable -->
+    <file src="bin\Release\YourServiceName.exe" target="tools\YourServiceName.exe" />
+    
+    <!-- Include configuration files -->
+    <file src="bin\Release\YourServiceName.exe.config" target="tools\YourServiceName.exe.config" />
+    
+    <!-- Include any additional DLLs -->
+    <file src="bin\Release\*.dll" target="tools\" />
+    
+    <!-- Include installation scripts (optional) -->
+    <file src="install.ps1" target="tools\install.ps1" />
+    <file src="uninstall.ps1" target="tools\uninstall.ps1" />
+    
+    <!-- Include any documentation -->
+    <file src="README.md" target="content\README.md" />
+  </files>
+</package>

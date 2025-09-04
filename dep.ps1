@@ -1,3 +1,7 @@
+.\dependency-check.bat --format ALL --out "C:\GIT\DOTNET\ASX.SFTP.Lib\dependency-check-report" --enableExperimental --enableRetired --scan "C:\GIT\DOTNET\ASX.SFTP.Lib\bin" --scan "C:\GIT\DOTNET\ASX.SFTP.Lib\packages" --failOnCVSS 7 --suppression suppression.xml --prettyPrint --log dependency-check.log
+
+
+
 # OWASP Dependency Check Analysis Script for .NET 4.8 SSH.NET Project
 param(
     [string]$ProjectPath = ".",

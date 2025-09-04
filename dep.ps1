@@ -1,4 +1,4 @@
-.\dependency-check.bat --format ALL --out "C:\GIT\DOTNET\ASX.SFTP.Lib\dependency-check-report" --enableExperimental --enableRetired --scan "C:\GIT\DOTNET\ASX.SFTP.Lib\bin" --scan "C:\GIT\DOTNET\ASX.SFTP.Lib\packages" --failOnCVSS 7 --suppression suppression.xml --prettyPrint --log dependency-check.log
+.\dependency-check.bat --format ALL --out "C:\GIT\DOTNET\SFTP.Lib\dependency-check-report" --enableExperimental --enableRetired --scan "C:\GIT\DOTNET\SFTP.Lib\bin" --scan "C:\GIT\DOTNET\SFTP.Lib\packages" --failOnCVSS 7 --suppression suppression.xml --prettyPrint --log dependency-check.log
 
 
 

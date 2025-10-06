@@ -1,1 +1,59 @@
+package com.example.kafka.transforms;
+
+import org.apache.kafka.connect.connector.ConnectRecord;
+import org.apache.kafka.connect.transforms.Transformation;
+import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Struct;
+import org.apache.kafka.connect.errors.DataException;
+import org.apache.kafka.connect.transforms.util.Requirements;
+
+import java.util.Map;
+
+public class ChangeAvroNamespace<R extends ConnectRecord<R>> implements Transformation<R> {
+
+    public static final String NEW_NAMESPACE_CONFIG = "new.namespace";
+    private String newNamespace;
+
+    @Override
+    public R apply(R record) {
+        Object value = record.value();
+        Schema schema = record.valueSchema();
+
+        if (value == null || schema == null || !(value instanceof Struct)) {
+            return record;
+        }
+
+        Struct struct = (Struct) value;
+
+        Schema updatedSchema = SchemaUtil.copySchemaWithNamespace(schema, newNamespace);
+        Struct updatedStruct = SchemaUtil.copyStructWithSchema(struct, updatedSchema);
+
+        return record.newRecord(
+                record.topic(),
+                record.kafkaPartition(),
+                record.keySchema(),
+                record.key(),
+                updatedSchema,
+                updatedStruct,
+                record.timestamp()
+        );
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs) {
+        this.newNamespace = (String) configs.get(NEW_NAMESPACE_CONFIG);
+        if (newNamespace == null || newNamespace.isEmpty()) {
+            throw new DataException("Missing required configuration: new.namespace");
+        }
+    }
+
+    @Override
+    public void close() {}
+
+    @Override
+    public ConfigDef config() {
+        return new ConfigDef()
+            .define(NEW_NAMESPACE_CONFIG, ConfigDef.Type.STRING, ConfigDef.Importance.HIGH, "New Avro namespace");
+    }
+}
 

@@ -84,3 +84,41 @@ USE YourDatabaseName;
 GO
 
 EXEC sp_helpuser;
+
+USE YourDatabaseName;
+GO
+
+DECLARE @TableName NVARCHAR(128) = 'YourTableName';
+DECLARE @SchemaName NVARCHAR(128) = 'dbo';
+
+-- Direct permissions
+SELECT 
+    dp.name AS UserName,
+    dp.type_desc AS UserType,
+    'Direct' AS AccessType,
+    perm.permission_name AS Permission,
+    perm.state_desc AS PermissionState,
+    OBJECT_SCHEMA_NAME(perm.major_id) + '.' + OBJECT_NAME(perm.major_id) AS ObjectName
+FROM sys.database_principals dp
+INNER JOIN sys.database_permissions perm ON dp.principal_id = perm.grantee_principal_id
+WHERE perm.major_id = OBJECT_ID(@SchemaName + '.' + @TableName)
+    AND dp.type IN ('S', 'U', 'G')
+
+UNION ALL
+
+-- Role-based permissions
+SELECT 
+    member.name AS UserName,
+    member.type_desc AS UserType,
+    'Via Role: ' + role.name AS AccessType,
+    perm.permission_name AS Permission,
+    perm.state_desc AS PermissionState,
+    OBJECT_SCHEMA_NAME(perm.major_id) + '.' + OBJECT_NAME(perm.major_id) AS ObjectName
+FROM sys.database_principals member
+INNER JOIN sys.database_role_members rm ON member.principal_id = rm.member_principal_id
+INNER JOIN sys.database_principals role ON rm.role_principal_id = role.principal_id
+INNER JOIN sys.database_permissions perm ON role.principal_id = perm.grantee_principal_id
+WHERE perm.major_id = OBJECT_ID(@SchemaName + '.' + @TableName)
+    AND member.type IN ('S', 'U', 'G')
+
+ORDER BY UserName, Permission;
